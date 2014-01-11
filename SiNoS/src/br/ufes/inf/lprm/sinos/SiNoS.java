@@ -1,9 +1,7 @@
 package br.ufes.inf.lprm.sinos;
 
-import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NoSuchObjectException;
 import java.rmi.NotBoundException;
@@ -59,19 +57,23 @@ public class SiNoS {
 			System.exit(0);
 		}
 		
-		System.out.println("Type 'stop' to stop.");
-		
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		while(true){
-			try {
-				String in = br.readLine();
-				if(in.toLowerCase().equals("by") || in.toLowerCase().equals("exit") || in.toLowerCase().equals("stop")){
-					manager.stop();
-				}
-			} catch (IOException e) {
-				Logger.getLogger(SiNoS.class.getName()).log(Level.WARNING, "Could not stop Sinos.", e);
-			}
-		}
+		new Menu(manager);
+	}
+	
+	public void disableCreation () {
+		providerChannel.ALLOW = false;
+	}
+	
+	public void enableCreation () {
+		providerChannel.ALLOW = true;
+	}
+	
+	public void changeChannelCreationPermission () {
+		providerChannel.ALLOW = !providerChannel.ALLOW;
+	}
+	
+	public boolean creationStatus () {
+		return providerChannel.ALLOW;
 	}
 	
 	public void start (int port) throws RemoteException {
@@ -102,7 +104,7 @@ public class SiNoS {
 	
 	public void stop () {
 		Logger.getLogger(SiNoS.class.getName()).log(Level.INFO, "Stopping Sinos...");
-		CommonRequestHandler.disconnectAll(DisconnectionReason.SINOS_OFF);
+		CommonRequestHandler.closeAllChannels(DisconnectionReason.SINOS_OFF);
 		
 		if(registry != null) {
 			try {

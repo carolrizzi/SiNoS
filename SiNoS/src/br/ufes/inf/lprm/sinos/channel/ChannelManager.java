@@ -2,7 +2,6 @@ package br.ufes.inf.lprm.sinos.channel;
 
 import java.rmi.RemoteException;
 
-import br.ufes.inf.lprm.sinos.channel.handler.CommonRequestHandler;
 import br.ufes.inf.lprm.sinos.common.DisconnectionReason;
 import br.ufes.inf.lprm.sinos.common.NotificationType;
 import br.ufes.inf.lprm.sinos.common.rsv.SituationHolder;
@@ -11,47 +10,61 @@ import br.ufes.inf.lprm.sinos.subscriber.callback.SubscriberCallback;
 
 public class ChannelManager {
 
-	private String channelName;
-	private PublisherChannelManager publisherManager;
-	private SubscriberChannelManager subscriberManager;
+	private String id;
+	private String name;
+	private PublisherChannelManager pubManager;
+	private SubscriberChannelManager subManager;
 	
-	public ChannelManager(String channelName, PublisherCallback publisher) throws RemoteException {
-		this.channelName = channelName;
-		publisherManager = new PublisherChannelManager(publisher, channelName, this);
-		subscriberManager = new SubscriberChannelManager();
+	public ChannelManager(String channelId, String channelName) {
+		this.id = channelId;
+		this.name = channelName;
+		pubManager = new PublisherChannelManager();
+		subManager = new SubscriberChannelManager();
 	}
 	
-	public void addPublisher (PublisherCallback publisher) throws RemoteException {
-		publisherManager.addPublisher(publisher);
+	// --- CHANNEL --- //
+	public String getChannelId () {
+		return this.id;
 	}
 	
-	public void disconnect (DisconnectionReason reason) {
-		publisherManager.disconnect(reason);
-		subscriberManager.disconnect(reason);
+	public String getChannelName () {
+		return this.name;
 	}
 	
-	public void closeChannel (int publisherId) {
-		if(publisherManager.closeChannel(publisherId)){
-			unsubscribeAllAndCloseChannel(DisconnectionReason.CHANNEL_OFF);
-		}
+	// --- PUBLISHER --- //
+	public void connectPublisher (PublisherCallback publisher, String publisherId) throws RemoteException {
+		pubManager.connectPublisher(publisher, publisherId);
 	}
 	
-	public void unsubscribeAllAndCloseChannel (DisconnectionReason reason) {
-		subscriberManager.disconnect(reason);
-		CommonRequestHandler.closeChannel(channelName);
+	public void disconnectPublisher (PublisherCallback publisher, DisconnectionReason reason) throws RemoteException {
+		pubManager.disconnectPublisher(publisher, reason);
+	}
+	
+	public void disconnectChannel (DisconnectionReason reason) {
+		pubManager.disconnectAllPublishers(reason);
+		subManager.disconnectAllSubscribers(reason);
+	}
+
+	public void listPublishers() {
+		System.out.println("\nChannel " + this.name + ": ");
+		pubManager.listPublishers();
+	}
+	
+	// --- SUBSCRIBER --- //
+	public void subscribe (SubscriberCallback subscriber, String subscriberId) throws RemoteException {
+		subManager.subscribe(subscriber, subscriberId);
+	}
+	
+	public void unsubscribe (SubscriberCallback subscriber) throws RemoteException {
+		subManager.unsubscribe(subscriber);
 	}
 	
 	public void publish (NotificationType notificationType, SituationHolder situation) {
-		subscriberManager.publish(notificationType, situation);
-//		publisherManager.restart();
+		subManager.publish(notificationType, situation);
 	}
 	
-	public void subscribe (SubscriberCallback subscriber) {
-		subscriberManager.subscribe(subscriber);
+	public void listSubscribers () {
+		System.out.println("\nChannel " + this.name + ": ");
+		subManager.listSubscribers();
 	}
-	
-	public void unsubscribe (SubscriberCallback subscriber) {
-		subscriberManager.unsubscribe(subscriber);
-	}
-	
 }

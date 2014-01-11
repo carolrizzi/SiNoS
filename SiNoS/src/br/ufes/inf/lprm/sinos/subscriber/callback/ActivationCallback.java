@@ -12,11 +12,12 @@ import br.ufes.inf.lprm.situation.SituationType;
 public class ActivationCallback<T extends SituationType> extends UnicastRemoteObject implements SubscriberCallback{
 
 	private static final long serialVersionUID = 1L;
-
 	private SituationListener<T> handler;
 	private boolean notifyDisconnection;
+	private String subscriberId;
 	
-	public ActivationCallback(SituationListener<T> handler, boolean notifyDisconnection) throws RemoteException {
+	public ActivationCallback(String subscriberId, SituationListener<T> handler, boolean notifyDisconnection) throws RemoteException {
+		this.subscriberId = subscriberId;
 		this.handler = handler;
 		this.notifyDisconnection = notifyDisconnection;
 	}
@@ -28,8 +29,8 @@ public class ActivationCallback<T extends SituationType> extends UnicastRemoteOb
 	}
 
 	@Override
-	public String getEventChannel() throws RemoteException {
-		return handler.getChannelName();
+	public String getChannelId() throws RemoteException {
+		return handler.getChannelId();
 	}
 
 	@Override
@@ -49,8 +50,9 @@ public class ActivationCallback<T extends SituationType> extends UnicastRemoteOb
 	}
 
 	@Override
-	public int getId() throws RemoteException {
-		return handler.hashCode();
+	public String getId() throws RemoteException {
+		return this.subscriberId;
 	}
+
 
 }

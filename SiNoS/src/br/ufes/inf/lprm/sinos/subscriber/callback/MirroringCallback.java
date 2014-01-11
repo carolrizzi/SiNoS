@@ -23,8 +23,10 @@ public class MirroringCallback<T extends SituationType> extends UnicastRemoteObj
 	private HashMap<Integer, FactHandle> factHandles = new HashMap<Integer, FactHandle>();
 	T previous = null;
 	private boolean notifyDisconnection;
+	private String subscriberId;
 	
-	public MirroringCallback(SituationListener<T> handler, boolean notifyDisconnection) throws RemoteException {
+	public MirroringCallback(String subscriberId, SituationListener<T> handler, boolean notifyDisconnection) throws RemoteException {
+		this.subscriberId = subscriberId;
 		this.handler = handler;
 		this.notifyDisconnection = notifyDisconnection;
 		this.ksession = handler.getStatefulKnowledgeSession();
@@ -80,8 +82,8 @@ public class MirroringCallback<T extends SituationType> extends UnicastRemoteObj
 	}
 
 	@Override
-	public String getEventChannel() throws RemoteException {
-		return handler.getChannelName();
+	public String getChannelId() throws RemoteException {
+		return handler.getChannelId();
 	}
 
 	@Override
@@ -102,8 +104,9 @@ public class MirroringCallback<T extends SituationType> extends UnicastRemoteObj
 	}
 
 	@Override
-	public int getId() throws RemoteException {
-		return handler.hashCode();
+	public String getId() throws RemoteException {
+		return this.subscriberId;
 	}
+
 
 }

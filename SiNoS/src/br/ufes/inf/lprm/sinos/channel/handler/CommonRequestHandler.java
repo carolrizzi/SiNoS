@@ -1,6 +1,7 @@
 package br.ufes.inf.lprm.sinos.channel.handler;
 
 import java.io.FileInputStream;
+import java.util.ArrayList;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -18,32 +19,97 @@ public class CommonRequestHandler {
 	public static InitProperties properties = new InitProperties();
 	public static long attempts = Long.parseLong(properties.getProperty("attempts", "10"));
 	public static long timeout = Long.parseLong(properties.getProperty("timeout", "60"));
-	public static long channelInactivityTimeout = Long.parseLong(properties.getProperty("channel-inactivity-timeout", "60"));
+//	public static long channelInactivityTimeout = Long.parseLong(properties.getProperty("channel-inactivity-timeout", "60"));
 	
-
-	public static void disconnectAll (DisconnectionReason reason) {
+	public static ArrayList<String> getChannelsList () {
+		ArrayList<String> channelsId = new ArrayList<>();
+		for (String channelId : channels.keySet()){
+			channelsId.add(channelId);
+		}
+		return channelsId;
+	}
+	
+	public static void listPublishers () {
+		if(channels.isEmpty()){
+			System.out.println("There are currently no publishers registered in this service, because there are no open channels.");
+			return;
+		}
 		for(ChannelManager channel : channels.values()){
-			channel.disconnect(reason);
+			channel.listPublishers();
 		}
 	}
-
-	public static void disconnect (final Callback callback, final DisconnectionReason reason) {
-		new Thread () {
-			public void run() {
-				boolean success = false;
-				for(int i = 0; i < attempts; i++){
-					try{
-						callback.disconnect(reason);
-						break;
-					}catch (Exception e) {
-						Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Attempt of reaching client: " + (i + 1));
-					}
-				}
-				if(!success){
-					Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Could not notify client about disconnection.");
-				}
+	
+	public static void listPublishers (String channelId) {
+		if(channels.isEmpty()){
+			System.out.println("There are currently no publishers registered in this service, because there are no open channels.");
+			return;
+		}
+		ChannelManager channel = channels.get(channelId);
+		if(channel == null){
+			System.out.println("Channel not found: " + channelId);
+			return;
+		}
+		channel.listPublishers();
+	}
+	
+	public static void listSubscribers () {
+		if(channels.isEmpty()){
+			System.out.println("There are currently no subscriptions registered in this service, because there are no open channels.");
+			return;
+		}
+		for(ChannelManager channel : channels.values()){
+			channel.listSubscribers();
+		}
+	}
+	
+	public static void listSubscribers (String channelId) {
+		if(channels.isEmpty()){
+			System.out.println("There are currently no subscriptions registered in this service, because there are no open channels.");
+			return;
+		}
+		ChannelManager channel = channels.get(channelId);
+		if(channel == null){
+			System.err.println("Channel not found: " + channelId);
+			return;
+		}
+		channel.listSubscribers();
+	}
+	
+	public static void listChannels (boolean withId) {
+		if(channels.isEmpty()){
+			System.out.println("There are currently no open channels in this service.");
+			return;
+		}
+		if(withId){
+			System.out.println("List of active channels [name (id)]:");
+			for(ChannelManager channel : channels.values()){
+				System.out.println("- " + channel.getChannelName() + " (" + channel.getChannelId() + ")");
 			}
-		}.start();
+		}else{
+			System.out.println("List of active channels:");
+			for(ChannelManager channel : channels.values()){
+				System.out.println("- " + channel.getChannelName());
+			}
+		}
+	}
+	
+	public static void closeChannel (String channelId) {
+		ChannelManager channel = channels.get(channelId);
+		if(channel == null){
+			System.out.println("Channel not found: " + channelId);
+			return;
+		}
+		channel.disconnectChannel(DisconnectionReason.CHANNEL_OFF);
+		channels.remove(channelId);
+		System.out.println("Channel " + channel.getChannelName() + " has been closed.");
+	}
+	
+	public static void closeAllChannels (DisconnectionReason reason) {
+		for(ChannelManager channel : channels.values()){
+			channel.disconnectChannel(reason);
+		}
+		channels = new ConcurrentHashMap<>();
+		System.out.println("All channels closed.");
 	}
 	
 	public static class InitProperties {
@@ -70,9 +136,6 @@ public class CommonRequestHandler {
 		}
 	}
 
-	public static void closeChannel(String channelName) {
-		channels.remove(channelName);
-	}
 }
 
 

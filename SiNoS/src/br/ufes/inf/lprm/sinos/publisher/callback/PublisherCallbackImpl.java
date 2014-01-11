@@ -10,9 +10,11 @@ public class PublisherCallbackImpl extends UnicastRemoteObject implements Publis
 
 	private static final long serialVersionUID = 1L;
 	private SituationChannel channel;
+	private String publisherId = null;
 	
 	public PublisherCallbackImpl(SituationChannel channel) throws RemoteException {
 		this.channel = channel;
+		this.publisherId = channel.getId();
 	}
 	
 	@Override
@@ -30,8 +32,8 @@ public class PublisherCallbackImpl extends UnicastRemoteObject implements Publis
 	}
 
 	@Override
-	public int getId() throws RemoteException {
-		return channel.hashCode();
+	public String getId() throws RemoteException {
+		return this.publisherId;
 	}
 
 }

@@ -10,7 +10,7 @@ public interface SubscriberCallback extends Callback{
 	
 	public void call (SituationHolder situation) throws RemoteException;
 	
-	public String getEventChannel () throws RemoteException;
+	public String getChannelId () throws RemoteException;
 	
 	public NotificationType getOperation () throws RemoteException;
 

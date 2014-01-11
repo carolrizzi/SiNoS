@@ -2,6 +2,9 @@ package br.ufes.inf.lprm.sinos.channel;
 
 import java.rmi.RemoteException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -20,24 +23,26 @@ import br.ufes.inf.lprm.sinos.subscriber.callback.SubscriberCallback;
 
 public class SubscriberChannelManager {
 
-	private ArrayList<SubscriberCallback> subscribers = new ArrayList<>();
+//	private ArrayList<SubscriberCallback> subscribers = new ArrayList<>();
+	private HashMap<SubscriberCallback, String> subscribers = new HashMap<>();
 
-	public synchronized void subscribe (SubscriberCallback subscriber) {
-		try {
-			Logger.getLogger(this.getClass().getName()).log(Level.INFO, "New Subscription: " + subscriber.getId());
-		} catch (RemoteException e) {
-			e.printStackTrace();
+	public synchronized void subscribe (SubscriberCallback subscriber, String subscriberId) throws RemoteException {
+		String id = subscriberId;
+		if(id == null || id.isEmpty()){
+			id = (UUID.randomUUID()).toString();
 		}
-		subscribers.add(subscriber);
+//		subscribers.add(subscriber);
+		subscribers.put(subscriber, id); //TODO: I think I could use a synchronized block here, instead of a synchronized method.
+
+		Logger.getLogger(this.getClass().getName()).log(Level.INFO, "New Subscription: " + id);
 	}
 	
-	public synchronized void unsubscribe (SubscriberCallback subscriber) {
-		boolean contains = subscribers.remove(subscriber);
-		try {
-			Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Subscription removed: " + subscriber.getId() + ". Contains: " + contains);
-		} catch (RemoteException e) {
-			e.printStackTrace();
+	public synchronized void unsubscribe (SubscriberCallback subscriber) throws RemoteException {
+		String id = subscribers.remove(subscriber);
+		if(id == null) {
+			throw new RemoteException("Could not disconnect subscriber, because subscriber does not exist.");
 		}
+		Logger.getLogger(this.getClass().getName()).log(Level.INFO, "Subscriber disconnected: " + id);
 	}
 	
 	public void publish (final NotificationType notificationType, final SituationHolder situation) {
@@ -54,9 +59,9 @@ public class SubscriberChannelManager {
 		}
 		
 		ArrayList<Task> toRemove = new ArrayList<>();
-		ExecutorService executor = Executors.newFixedThreadPool(size);
+		ExecutorService executor = Executors.newFixedThreadPool(size); //TODO: is this the better method to use here?
 		
-		for(final SubscriberCallback subscriber : subscribers){
+		for(final SubscriberCallback subscriber : subscribers.keySet()){
 			try {
 				final NotificationType subscriberOperation = subscriber.getOperation();
 				new Thread () {
@@ -72,10 +77,12 @@ public class SubscriberChannelManager {
 				}.start();
 			} catch (RemoteException e) {
 				toRemove.add(new Task(subscriber, executor.submit(new CheckSubscriberConnection(subscriber))));
+				//TODO: I could make it better, like having an array list for each notification type
 				Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Could not notify subscriber. Reason: Could not check subscriber's notification type.", e);
 			}
 		}
 		
+		// TODO: I think I could make a dedicated class for this task, like a job that keeps running in parallel with the main program
 		for(Task task : toRemove){
 			try {
 				SubscriberCallback subscriber = task.future.get(CommonRequestHandler.timeout, TimeUnit.SECONDS);
@@ -96,11 +103,47 @@ public class SubscriberChannelManager {
 		executor.shutdown();
 	}
 	
-	public synchronized void disconnect (DisconnectionReason reason) {
-		for(SubscriberCallback subscriber : subscribers){
-			CommonRequestHandler.disconnect(subscriber, reason);
+	public synchronized void disconnectAllSubscribers (DisconnectionReason reason) {
+		if(reason == null){
+			reason = DisconnectionReason.UNKNOWN;
 		}
-		subscribers = new ArrayList<>();
+		for(Entry<SubscriberCallback, String> subscriber : subscribers.entrySet()){
+			sendDisconnectionNotification(subscriber.getKey(), subscriber.getValue(),  reason);
+		}
+		subscribers = new HashMap<>();
+	}
+	
+	public void listSubscribers () {
+		if(subscribers.isEmpty()){
+			System.out.println("There are currently no subscriptions for this channel.");
+			return;
+		}
+		for(Entry<SubscriberCallback, String> subscriberId : subscribers.entrySet())
+			try {
+				System.out.println("- " + subscriberId.getValue() + " (" + subscriberId.getKey().getOperation().toString().toLowerCase() + ")");
+			} catch (RemoteException e) {
+				System.out.println("- " + subscriberId.getValue() + " (unkonwn due to remote exception issues)");
+			}
+	}
+	
+	private void sendDisconnectionNotification (final SubscriberCallback subscriber, final String id, final DisconnectionReason reason) {
+		if (reason == null) return;
+		new Thread () {
+			public void run() {
+				boolean success = false;
+				for(int i = 0; i < CommonRequestHandler.attempts; i++){
+					try{
+						subscriber.disconnect(reason);
+						break;
+					}catch (Exception e) {
+						Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Attempt " + (i + 1) + " of reaching subscriber " + id + ".");
+					}
+				}
+				if(!success){
+					Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Could not notify disconnection to subscriber " + id + ", because subscriber is unreacheable");
+				}
+			}
+		}.start();
 	}
 }
 
@@ -119,7 +162,7 @@ class CheckSubscriberConnection implements Callable<SubscriberCallback>{
 				subscriber.getOperation();
 				return null;
 			}catch (Exception e) {
-				Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Attempt " + i + " of calling consumer.", e);
+				Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Attempt " + i + " of calling subscriber.", e);
 			}
 		}
 		Logger.getLogger(this.getClass().getName()).log(Level.WARNING, "Could not contact subscriber. Removing it from subscriptions.");

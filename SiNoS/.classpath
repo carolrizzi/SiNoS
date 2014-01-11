@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="lib/knowledge-api.jar"/>
+	<classpathentry kind="lib" path="lib/situation-api-0.7.0.jar"/>
+	<classpathentry kind="lib" path="pkg/sinos.publisher.0.4.4.jar"/>
+	<classpathentry kind="lib" path="pkg/sinos.service.0.4.4.jar"/>
+	<classpathentry kind="lib" path="pkg/sinos.subscriber.0.4.4.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

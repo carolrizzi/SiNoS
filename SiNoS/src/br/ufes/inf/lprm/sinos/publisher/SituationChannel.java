@@ -6,6 +6,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -17,40 +18,60 @@ import br.ufes.inf.lprm.situation.SituationType;
 
 /**
  * 
- * This class creates a channel for publishing situations of a specific type in a specific SiNoS Service.
+ * This class creates a channel for publishing situations of a specific type in a specific situation service.
  *
  */
 public abstract class SituationChannel{
 
-	private String channelName = null;
-	private PublisherRequestHandler eventChannel = null;
+	private String channelId = null;
+	private PublisherRequestHandler channelHandler = null;
 	private Logger logger;
 	private Class<? extends SituationType> situationType;
+	private PublisherCallbackImpl publisher;
+	private String publisherId;
 	
 	/**
-	 * Creates a new Situation Channel in the specified host and port. The new channel will publish situations only of the specified situation type.
+	 * Connects to a channel for the specified situation type, whose situation service is located at the provided host and port.
+	 * If the channel does not exist, a new one is automatically created if allowed by the specified situation service.
 	 * Log level is initialized as SEVERE
-	 * @param host Address (URL or IP) of the SiNoS Service that will publish the situations.
-	 * @param port Port number of the SiNoS Service that will publish the situations
-	 * @param situationType Type of situation which will be published by this situation channel.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
+	 * @param situationType Type of situation to be published through this connection.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 * @throws NotBoundException Indicates that there is no event channel running in the provided host.
 	 */
 	public SituationChannel(String host, int port, Class<? extends SituationType> situationType) throws RemoteException, NotBoundException{
-		this(host, port, situationType, Level.SEVERE);
+		this(null, host, port, situationType, Level.SEVERE);
 	}
 	
 	/**
-	 * Creates a new Situation Channel in the specified host and port. The new channel will publish situations only of the specified situation type.
+	 * Connects to a channel for the specified situation type, whose situation service is located at the provided host and port.
+	 * If the channel does not exist a new one is automatically created if allowed by the specified situation service.
 	 * Log level is initialized as SEVERE
-	 * @param host Address (URL or IP) of the SiNoS Service that will publish the situations.
-	 * @param port Port number of the SiNoS Service that will publish the situations
-	 * @param situationType Type of situation which will be published by this situation channel.
+	 * @param publisherId A string that identifies the publisher. If null, the service assigns a random id as the publisher's name.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
+	 * @param situationType Type of situation to be published through this connection.
+	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
+	 * @throws NotBoundException Indicates that there is no event channel running in the provided host.
+	 */
+	public SituationChannel(String publisherId, String host, int port, Class<? extends SituationType> situationType) throws RemoteException, NotBoundException{
+		this(publisherId, host, port, situationType, Level.SEVERE);
+	}
+	
+	/**
+	 * Connects to a channel for the specified situation type, whose situation service is located at the provided host and port.
+	 * If the channel does not exist a new one is automatically created if allowed by the specified situation service.
+	 * @param publisherId A string that identifies the publisher. If null, the service assigns a random id as the publisher's name.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
+	 * @param situationType Type of situation to be published through this connection.
 	 * @param logLevel Level of logger output. It can be: SEVERE (errors and exceptions), WARNING (warnings and exceptions) or INFO (debug-level output).
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 * @throws NotBoundException Indicates that there is no event channel running in the provided host.
 	 */
-	public SituationChannel(String host, int port, Class<? extends SituationType> situationType, Level logLevel) throws RemoteException, NotBoundException{
+	public SituationChannel(String publisherId, String host, int port, Class<? extends SituationType> situationType, Level logLevel) throws RemoteException, NotBoundException{
+		this.publisherId = publisherId;
 		this.situationType = situationType;
 		ObjectStreamClass osc = ObjectStreamClass.lookup(situationType);
 		String cn = osc.getName() + "&%&";
@@ -60,13 +81,14 @@ public abstract class SituationChannel{
 			cn += field.getTypeCode();
 		}
 		
-		this.channelName = cn;
+		this.channelId = cn;
 		
 		Registry registry = LocateRegistry.getRegistry(host, port);
-		PublisherRequestHandler eventChannel = (PublisherRequestHandler) registry.lookup(PublisherRequestHandler.BIND_NAME + port);
+		PublisherRequestHandler channelHandler = (PublisherRequestHandler) registry.lookup(PublisherRequestHandler.BIND_NAME + port);
 		
-		eventChannel.createChannel(channelName, new PublisherCallbackImpl(this));
-		this.eventChannel = eventChannel;
+		this.publisher = new PublisherCallbackImpl(this);
+		channelHandler.connect(channelId, publisher, publisherId);
+		this.channelHandler = channelHandler;
 		
 		logger = Logger.getLogger("br.ufes.inf.lprm.sinos.provider.channel.EventChannel");
 		logger.setLevel(logLevel);
@@ -75,12 +97,12 @@ public abstract class SituationChannel{
 	}
 	
 	/**
-	 * Closes this situation channel, if it is open.
+	 * Closes the connection with this situation channel, if it is open.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 */
-	public final void closeChannel () throws RemoteException {
-		eventChannel.closeChannel(this.hashCode(), channelName);
-		logger.log(Level.INFO, "The channel " + channelName + " has been shut down.");
+	public final void disconnect () throws RemoteException {
+		channelHandler.disconnect(this.publisher, channelId);
+		logger.log(Level.INFO, "The channel " + channelId + " has been disconnected.");
 	}
 	
 	/**
@@ -93,7 +115,7 @@ public abstract class SituationChannel{
 		new Thread () {
 			public void run () {
 				try {
-					eventChannel.publishSituation(channelName, new SituationHolderImpl(situation));
+					channelHandler.publish(channelId, new SituationHolderImpl(situation));
 					try {sleep(1000);} catch (InterruptedException e) {}
 				} catch (RemoteException e) {
 					logger.log(Level.SEVERE, "Could not publish situation.", e);
@@ -102,6 +124,27 @@ public abstract class SituationChannel{
 		}.start();
 	}
 	
+	/**
+	 * This method returns a list of existing situation channels in the connected situation service. 
+	 * @return An array of channel ids.
+	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
+	 */
+	public ArrayList<String> getChannels () throws RemoteException {
+		return channelHandler.getChannels();
+	}
+	
+	/**
+	 * Indicates whether the connected situation service allows publishers to create new channels.
+	 * @return True if publishers are allowed to create new channels in the respective service. False otherwise. 
+	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
+	 */
+	public boolean canCreateChannel () throws RemoteException {
+		return channelHandler.canCreateChannel();
+	}
+	
+	public final String getId () {
+		return this.publisherId;
+	}
 	
 	public abstract void onDisconnection (DisconnectionReason reason);
 

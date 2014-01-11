@@ -11,6 +11,6 @@ public interface Callback extends Remote{
 	
 	public void disconnect (final DisconnectionReason reason) throws RemoteException;
 	
-	public int getId () throws RemoteException;
+	public String getId () throws RemoteException;
 
 }

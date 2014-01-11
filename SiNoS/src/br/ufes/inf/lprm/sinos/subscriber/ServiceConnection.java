@@ -21,7 +21,7 @@ import br.ufes.inf.lprm.situation.SituationType;
 
 /**
  * 
- * This class provides means to communicate with a SiNoS Service in order to listen situation nofitications.
+ * This class provides means to communicate with a situation service in order to listen situation notifications.
  *
  */
 public class ServiceConnection{
@@ -31,28 +31,44 @@ public class ServiceConnection{
 	private SubscriberRequestHandler channel = null;
 	private HashMap<SituationListener<?>, ArrayList<SubscriberCallback>> handlers;
 	private Logger logger;
+	private String subscriberName;
 	
 	/**
-	 * Connects to the SiNoS Service that is available in the specified host and port.
+	 * Connects to the situation service located at the specified host and port.
 	 * Log level is initialized as SEVERE.
-	 * @param host Address (URL or IP) of the SiNoS Service.
-	 * @param port Port number of the SiNoS Service.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
-	 * @throws NotBoundException Indicates that there is no event channel running in the provided host.
+	 * @throws NotBoundException Indicates that there is no situation channel running in the provided host.
 	 */
 	public ServiceConnection(String host, int port) throws RemoteException, NotBoundException{
-		this(host, port, Level.SEVERE);
+		this(null, host, port, Level.SEVERE);
 	}
 	
 	/**
-	 * Connects to the SiNoS Service that is available in the specified host and port. 
-	 * @param host Address (URL or IP) of the SiNoS Service.
-	 * @param port Port number of the SiNoS Service.
+	 * Connects to the situation service located at the specified host and port.
+	 * Log level is initialized as SEVERE.
+	 * @param subscriberName A string that identifies the subscriber. If null, the service assigns a random id as the subscriber's name.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
+	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
+	 * @throws NotBoundException Indicates that there is no situation channel running in the provided host.
+	 */
+	public ServiceConnection(String subscriberName, String host, int port) throws RemoteException, NotBoundException{
+		this(subscriberName, host, port, Level.SEVERE);
+	}
+	
+	/**
+	 * Connects to the situation service located at the specified host and port.
+	 * @param subscriberName A string that identifies the subscriber. If null, the service assigns a random id as the subscriber's name.
+	 * @param host The service's address (URL or IP).
+	 * @param port The service's port number.
 	 * @param logLevel Level of logger output (SEVERE = errors and exceptions; WARNING = warnings and exceptions; INFO = debug-level output).
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 * @throws NotBoundException Indicates that there is no event channel running in the provided host.
 	 */
-	public ServiceConnection(String host, int port, Level logLevel) throws RemoteException, NotBoundException {
+	public ServiceConnection(String subscriberName, String host, int port, Level logLevel) throws RemoteException, NotBoundException {
+		this.subscriberName = subscriberName;
 		Registry registry = LocateRegistry.getRegistry(host, port);
 		channel = (SubscriberRequestHandler) registry.lookup(SubscriberRequestHandler.BIND_NAME + port);
 		handlers = new HashMap<SituationListener<?>, ArrayList<SubscriberCallback>>();
@@ -64,7 +80,7 @@ public class ServiceConnection{
 	}
 	
 	/**
-	 * This method subscribes a listener in the connected SiNoS Service. 
+	 * This method subscribes a listener in the connected situation service. 
 	 * @param listener The listener to be subscribed.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 */
@@ -79,8 +95,8 @@ public class ServiceConnection{
 		if(isDeclaringClass(listener, ACTIVATION)){
 			hasCallback = true;
 			try {
-				SubscriberCallback callback = new ActivationCallback<T>(listener, notifyDisconnection);
-				channel.subscribe(callback);
+				SubscriberCallback callback = new ActivationCallback<T>(this.subscriberName, listener, notifyDisconnection);
+				channel.subscribe(callback, callback.getId());
 				callbacks.add(callback);
 				notifyDisconnection = false;
 				logger.log(Level.INFO, "Callback for activation events was subscribed to channel " + listener.getChannelName());
@@ -92,8 +108,8 @@ public class ServiceConnection{
 		if (isDeclaringClass(listener, DEACTIVATION)){
 			hasCallback = true;
 			try{
-				SubscriberCallback callback = new DeactivationCallback<T>(listener, notifyDisconnection);
-				channel.subscribe(callback);
+				SubscriberCallback callback = new DeactivationCallback<T>(this.subscriberName, listener, notifyDisconnection);
+				channel.subscribe(callback, callback.getId());
 				callbacks.add(callback);
 				notifyDisconnection = false;
 				logger.log(Level.INFO, "Callback for deactivation events was subscribed to channel " + listener.getChannelName());
@@ -105,8 +121,8 @@ public class ServiceConnection{
 		if (listener.isMirrored()){
 			hasCallback = true;
 			try{
-				SubscriberCallback callback = new MirroringCallback<T>(listener, notifyDisconnection);
-				channel.subscribe(callback);
+				SubscriberCallback callback = new MirroringCallback<T>(this.subscriberName, listener, notifyDisconnection);
+				channel.subscribe(callback, callback.getId());
 				callbacks.add(callback);
 				notifyDisconnection = false;
 				logger.log(Level.INFO, "Callback for events mirroring (shadow fact) was subscribed to channel " + listener.getChannelName());
@@ -122,8 +138,8 @@ public class ServiceConnection{
 	}
 	
 	/**
-	 * This method unsubscribes a listener.
-	 * @param listener The listener to be unsubscribed.
+	 * This method unsubscribes a previously subscribed listener from the connected situation service.
+	 * @param listener The listener to be unsubscribed. Note that, in order to unsubscribe a listener, the same must have been previously subscribed.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 */
 	public <T extends SituationType> void unsubscribe (SituationListener<T> listener) throws RemoteException {
@@ -134,16 +150,16 @@ public class ServiceConnection{
 		for(SubscriberCallback callback : callbacks){
 			try {
 				channel.unsubscribe(callback);
-				logger.log(Level.INFO, "Event handler and its callbacks were unsubscribed from channel " + listener.getChannelName());
+				logger.log(Level.INFO, "Listener was unsubscribed from channel " + listener.getChannelName());
 			} catch (RemoteException e) {
-				logger.log(Level.SEVERE, "Could not unsubscribe event handler.", e);
+				logger.log(Level.SEVERE, "Could not unsubscribe listener.", e);
 			}
 		}
 	}
 	
 	/**
-	 * This method disables/unsubscribes a specific notification type of a listener.
-	 * @param listener The listener that contains the notification type that will be disabled.
+	 * This method disables/unsubscribes a specific notification type of a listener from the connected situation service.
+	 * @param listener The listener whose notification type will be disabled.
 	 * @param notificationType The type of notification to be disabled.
 	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
 	 */
@@ -187,6 +203,15 @@ public class ServiceConnection{
 		}
 		
 		callback.disconnect(null);
+	}
+	
+	/**
+	 * This method returns a list of existing situation channels in the connected situation service. 
+	 * @return An array of channel ids.
+	 * @throws RemoteException Indicates the occurrence of a communication-related exception during the execution of this remote method call.
+	 */
+	public ArrayList<String> getChannels () throws RemoteException {
+		return channel.getChannels();
 	}
 	
 	private <T extends SituationType> boolean isDeclaringClass (SituationListener<T> handler, String methodName) throws SecurityException {

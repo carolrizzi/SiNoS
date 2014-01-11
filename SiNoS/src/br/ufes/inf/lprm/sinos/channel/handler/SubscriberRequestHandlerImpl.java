@@ -1,6 +1,7 @@
 package br.ufes.inf.lprm.sinos.channel.handler;
 
 import java.rmi.RemoteException;
+import java.util.ArrayList;
 
 import br.ufes.inf.lprm.sinos.channel.ChannelManager;
 import br.ufes.inf.lprm.sinos.subscriber.callback.SubscriberCallback;
@@ -9,9 +10,9 @@ import br.ufes.inf.lprm.sinos.subscriber.handler.SubscriberRequestHandler;
 public class SubscriberRequestHandlerImpl extends CommonRequestHandler implements SubscriberRequestHandler{
 
 	@Override
-	public void subscribe(SubscriberCallback subscriber) throws RemoteException {
+	public void subscribe(SubscriberCallback subscriber, String subscriberId) throws RemoteException {
 		ChannelManager channel = getChannel(subscriber);
-		channel.subscribe(subscriber);
+		channel.subscribe(subscriber, subscriberId);
 	}
 
 	@Override
@@ -20,15 +21,20 @@ public class SubscriberRequestHandlerImpl extends CommonRequestHandler implement
 		channel.unsubscribe(subscriber);
 	}
 	
+	@Override
+	public ArrayList<String> getChannels() throws RemoteException {
+		return CommonRequestHandler.getChannelsList();
+	}
+	
 	private ChannelManager getChannel (SubscriberCallback callback) throws RemoteException{
-		if(callback == null) throw new RemoteException("Invalid Situation Listener.");//CallbackException(CallbackException.Message.INVALID_CALLBACK);
+		if(callback == null) throw new RemoteException("Invalid Situation Listener. Callback cannot be null.");
 		
-		String channelName = null;
-		if((channelName = callback.getEventChannel()) == null || channelName.equals(""))
-			throw new RemoteException("Invalid Situation Channel.");//SituationChannelException(SituationChannelException.Message.INVALID_EVENT_CHANNEL);
+		String channelId = null;
+		if((channelId = callback.getChannelId()) == null || channelId.equals(""))
+			throw new RemoteException("Invalid Situation Channel Id");
 		
-		ChannelManager channel =  channels.get(channelName);
-		if(channel == null) throw new RemoteException("Situation Channel not found.");//SituationChannelException(SituationChannelException.Message.CHANNEL_NOT_FOUND);
+		ChannelManager channel =  channels.get(channelId);
+		if(channel == null) throw new RemoteException("Situation Channel not found: " + channelId);
 		
 		return channel;
 	}
